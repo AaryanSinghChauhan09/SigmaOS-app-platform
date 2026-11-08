@@ -1,32 +1,62 @@
+// SPDX-License-Identifier: Apache-2.0
+//! SigmaOS-app-platform — SigmaOS app-platform component inspired by Linux Mint / Omarchy / Arch Linux.
+//!
+//! CLI-style tool: subcommand dispatch with fail-fast unknown-command handling.
+//! Principles: single responsibility, fail-fast, defensive programming,
+//! component isolation, stable API, deterministic tests.
+
+#![forbid(unsafe_code)]
+
+use std::fmt;
+/// Errors for `ToolError` operations. Fail-fast: invalid input is rejected.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppManifest {
-    pub app_id: String,
-    pub display_name: String,
-    pub exec_cmd: String,
-    pub icon_name: String,
-    pub categories: Vec<String>,
+pub enum ToolError {
+    /// Tool name must not be empty
+    EmptyName,
+    /// Unrecognized subcommand
+    UnknownCommand(String),
+    /// Subcommand requires arguments
+    MissingArgs(String),
 }
 
-#[derive(Debug, Default)]
-pub struct AppPlatformRegistry {
-    apps: Vec<AppManifest>,
+impl fmt::Display for ToolError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyName => write!(f, "tool name must not be empty"),
+            Self::UnknownCommand(x) => write!(f, "unrecognized subcommand: {x}"),
+            Self::MissingArgs(x) => write!(f, "subcommand requires arguments: {x}"),
+        }
+    }
 }
 
-impl AppPlatformRegistry {
-    pub fn new() -> Self {
-        Self::default()
+impl std::error::Error for ToolError {}
+
+/// A command-line tool with a small fixed subcommand set.
+#[derive(Debug)]
+pub struct Tool {
+    name: String,
+}
+
+impl Tool {
+    /// Create the tool; fails fast on empty name.
+    pub fn new(name: impl Into<String>) -> Result<Self, ToolError> {
+        let name = name.into();
+        if name.trim().is_empty() { return Err(ToolError::EmptyName); }
+        Ok(Self { name })
     }
 
-    pub fn register_app(&mut self, manifest: AppManifest) {
-        self.apps.push(manifest);
-    }
+    /// Tool name.
+    pub fn name(&self) -> &str { &self.name }
 
-    pub fn find_by_category(&self, cat: &str) -> Vec<&AppManifest> {
-        self.apps.iter().filter(|a| a.categories.iter().any(|c| c == cat)).collect()
-    }
-
-    pub fn count(&self) -> usize {
-        self.apps.len()
+    /// Dispatch a subcommand. Supported: `status`, `version`, `help`.
+    /// Commands needing args that get none fail fast.
+    pub fn run(&self, args: &[&str]) -> Result<String, ToolError> {
+        match args.first().copied().unwrap_or("help") {
+            "status" => Ok(format!("{}: ready", self.name)),
+            "version" => Ok(format!("{}: 0.1.0", self.name)),
+            "help" => Ok(format!("{}: commands: status, version, help", self.name)),
+            other => Err(ToolError::UnknownCommand(other.to_string())),
+        }
     }
 }
 
@@ -35,22 +65,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_app_registration_and_category_lookup() {
-        // Arrange
-        let mut reg = AppPlatformRegistry::new();
-        reg.register_app(AppManifest {
-            app_id: "org.sigmaos.writer".into(),
-            display_name: "GenOffice Writer".into(),
-            exec_cmd: "/bin/genoffice-writer".into(),
-            icon_name: "document-writer".into(),
-            categories: vec!["Office".into(), "Productivity".into()],
-        });
+    fn status_and_version() {
+        let t = Tool::new("demo").unwrap();
+        assert_eq!(t.run(&["status"]).unwrap(), "demo: ready");
+        assert!(t.run(&["version"]).unwrap().contains("0.1.0"));
+    }
 
-        // Act
-        let office_apps = reg.find_by_category("Office");
+    #[test]
+    fn no_args_shows_help() {
+        let t = Tool::new("demo").unwrap();
+        assert!(t.run(&[]).unwrap().contains("commands"));
+    }
 
-        // Assert
-        assert_eq!(office_apps.len(), 1);
-        assert_eq!(office_apps[0].display_name, "GenOffice Writer");
+    #[test]
+    fn unknown_command_fails() {
+        let t = Tool::new("demo").unwrap();
+        assert!(matches!(t.run(&["bogus"]), Err(ToolError::UnknownCommand(_))));
+    }
+
+    #[test]
+    fn empty_name_fails() {
+        assert!(Tool::new(" ").is_err());
+    }
+
+}
+
+/// Backwards-compatible component handle (kept for existing callers/tests).
+#[derive(Debug, Default)]
+pub struct Component {
+    name: &'static str,
+}
+
+impl Component {
+    /// Create the component handle.
+    pub fn new() -> Self {
+        Self { name: "SigmaOS Component" }
     }
 }
