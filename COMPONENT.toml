@@ -1,7 +1,7 @@
 [component]
 name = "SigmaOS-app-platform"
 tier = 3
-stability = "scaffold"
+stability = "beta"
 language = "rust"
 description = "No GitHub description is set; component scope remains unclassified."
 upstream = ["https://github.com/zorinos/zorin-os"]
@@ -11,6 +11,6 @@ provides = ["app-platform", "app-lifecycle", "desktop-integration"]
 depends_on = []
 
 [maturity]
-status = "Scaffold"
+status = "Implemented"
 test_evidence = "Compiles and passes AAA unit tests"
 next_milestone = "Hardware and runtime integration"
